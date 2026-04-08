@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TLB Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:     #050a0f;
+    --panel:  #0b1520;
+    --border: #0d2a3a;
+    --accent: #00d4ff;
+    --green:  #00ff88;
+    --red:    #ff3366;
+    --yellow: #ffcc00;
+    --orange: #ff8c00;
+    --purple: #cc44ff;
+    --text:   #c8e6f0;
+    --dim:    #4a7a8a;
+    --glow:   0 0 12px rgba(0,212,255,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Share Tech Mono', monospace; min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 20%, rgba(0,80,120,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(0,40,80,0.20) 0%, transparent 60%),
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: auto, auto, 40px 40px, 40px 40px;
+  }
+
+  /* ── HEADER ── */
+  header { text-align:center; padding:1.6rem 1rem 0.8rem; border-bottom:1px solid var(--border); position:relative; }
+  header::after { content:''; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%);
+    width:300px; height:2px; background:linear-gradient(90deg,transparent,var(--accent),transparent); }
+  h1 { font-family:'Orbitron',monospace; font-size:1.9rem; font-weight:900;
+       color:var(--accent); text-shadow:var(--glow); letter-spacing:4px; }
+  .subtitle { color:var(--dim); font-size:0.7rem; letter-spacing:3px; margin-top:3px; }
+
+  /* ── LAYOUT ── */
+  .container  { max-width:1600px; margin:0 auto; padding:1.2rem; }
+  .grid-main  { display:grid; grid-template-columns:400px 1fr; gap:1.2rem; }
+  .right-col  { display:flex; flex-direction:column; gap:1.2rem; }
+  .state-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; }
+
+  /* ── PANEL ── */
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:4px;
+           padding:1.1rem; position:relative; }
+  .panel::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%;
+    background:linear-gradient(to bottom,var(--accent),transparent); border-radius:4px 0 0 4px; }
+  .panel-title { font-family:'Orbitron',monospace; font-size:0.68rem; letter-spacing:3px;
+                 color:var(--accent); margin-bottom:0.85rem; text-transform:uppercase; }
+
+  /* ── FORM ── */
+  label { display:block; color:var(--dim); font-size:0.7rem; letter-spacing:1px;
+          margin-bottom:3px; margin-top:10px; }
+  label:first-of-type { margin-top:0; }
+  input, select, textarea {
+    width:100%; background:rgba(0,0,0,0.4); border:1px solid var(--border);
+    border-radius:3px; color:var(--accent); font-family:'Share Tech Mono',monospace;
+    font-size:0.83rem; padding:7px 9px; outline:none;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color:var(--accent); box-shadow:0 0 0 1px rgba(0,212,255,0.2);
+  }
+  textarea { resize:vertical; min-height:60px; }
+  select option { background:#0b1520; }
+
+  /* checkboxes */
+  .check-row { display:flex; gap:14px; align-items:center; margin-top:5px; }
+  .chk { display:flex; align-items:center; gap:4px; font-size:0.78rem; cursor:pointer; }
+  .chk input { width:14px; height:14px; padding:0; accent-color:var(--accent); cursor:pointer; }
+  .chk-r { color:var(--green); } .chk-w { color:var(--yellow); }
+  .chk-x { color:var(--orange); } .chk-g { color:var(--accent); }
+
+  /* ── BUTTONS ── */
+  .btn-row { display:flex; gap:8px; margin-top:1rem; }
+  button { flex:1; font-family:'Orbitron',monospace; font-size:0.68rem; letter-spacing:2px;
+           padding:9px; border:none; border-radius:3px; cursor:pointer;
+           transition:all .2s; text-transform:uppercase; }
+  #btnRun  { background:var(--accent); color:#000; font-weight:700; }
+  #btnRun:hover  { background:#33ddff; box-shadow:var(--glow); }
+  #btnStep { background:transparent; border:1px solid var(--yellow); color:var(--yellow); }
+  #btnStep:hover { background:rgba(255,204,0,0.1); }
+  #btnReset{ background:transparent; border:1px solid var(--dim); color:var(--dim); }
+  #btnReset:hover{ border-color:var(--red); color:var(--red); }
+  #btnSwitch { background:rgba(80,0,120,0.3); border:1px solid var(--purple);
+               color:var(--purple); flex:1; font-family:'Orbitron',monospace;
+               font-size:0.65rem; letter-spacing:1px; padding:8px; border-radius:3px;
+               cursor:pointer; transition:all .2s; text-transform:uppercase; margin-top:8px; width:100%; }
+  #btnSwitch:hover { background:rgba(204,68,255,0.15); }
+
+  .step-controls { display:none; gap:8px; margin-top:8px; }
+  .step-controls.active { display:flex; }
+  #btnPrev,#btnNext { flex:1; background:transparent; border:1px solid var(--accent);
+    color:var(--accent); font-family:'Orbitron',monospace; font-size:0.68rem;
+    letter-spacing:2px; padding:7px; border-radius:3px; cursor:pointer;
+    text-transform:uppercase; transition:all .2s; }
+  #btnPrev:hover,#btnNext:hover { background:rgba(0,212,255,0.1); }
+  #stepInfo { text-align:center; color:var(--dim); font-size:0.7rem; padding:5px; }
+
+  /* ── THRASHING BANNER ── */
+  #thrashBanner {
+    display:none; background:rgba(255,51,102,0.12); border:1px solid var(--red);
+    border-radius:3px; padding:8px 14px; color:var(--red);
+    font-family:'Orbitron',monospace; font-size:0.7rem; letter-spacing:2px;
+    text-align:center; animation:thrash-pulse 1.2s ease infinite;
+  }
+  @keyframes thrash-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.76rem; }
+  th { background:rgba(0,212,255,0.08); color:var(--accent); font-family:'Orbitron',monospace;
+       font-size:0.6rem; letter-spacing:2px; padding:7px 8px; text-align:left;
+       border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:6px 8px; border-bottom:1px solid rgba(13,42,58,0.5);
+       color:var(--text); white-space:nowrap; }
+  tr.hit    td { background:rgba(0,255,136,0.05); }
+  tr.miss   td { background:rgba(255,51,102,0.05); }
+  tr.fault  td { background:rgba(255,140,0,0.08); }
+  tr.active-row td { background:rgba(0,212,255,0.10); animation:pulse-row .5s ease; }
+  @keyframes pulse-row { 0%{background:rgba(0,212,255,0.25)} 100%{background:rgba(0,212,255,0.10)} }
+
+  /* page-table row tints */
+  tr.pt-dirty    td { background:rgba(255,51,102,0.07); }
+  tr.pt-ref      td { background:rgba(0,255,136,0.05); }
+  tr.pt-dref     td { background:rgba(255,140,0,0.07); }
+  tr.pt-fault    td { background:rgba(255,140,0,0.04); }
+
+  /* ── BADGES ── */
+  .badge { display:inline-block; padding:2px 7px; border-radius:2px;
+           font-family:'Orbitron',monospace; font-size:0.58rem; letter-spacing:1px; font-weight:700; }
+  .badge-hit    { background:rgba(0,255,136,0.15);  color:var(--green);  border:1px solid var(--green); }
+  .badge-miss   { background:rgba(255,51,102,0.15); color:var(--red);    border:1px solid var(--red); }
+  .badge-replace{ background:rgba(255,204,0,0.15);  color:var(--yellow); border:1px solid var(--yellow); }
+  .badge-fault  { background:rgba(255,140,0,0.18);  color:var(--orange); border:1px solid var(--orange); }
+  .badge-wb     { background:rgba(204,68,255,0.15); color:var(--purple); border:1px solid var(--purple); }
+  .badge-rd     { background:rgba(0,255,136,0.10);  color:var(--green);  border:1px solid rgba(0,255,136,0.3); font-size:0.55rem; }
+  .badge-wr     { background:rgba(255,204,0,0.10);  color:var(--yellow); border:1px solid rgba(255,204,0,0.3); font-size:0.55rem; }
+  .badge-ex     { background:rgba(255,140,0,0.10);  color:var(--orange); border:1px solid rgba(255,140,0,0.3); font-size:0.55rem; }
+
+  /* ── TLB SLOTS ── */
+  .tlb-slots { display:grid; gap:5px; }
+  .tlb-slot {
+    display:grid; grid-template-columns:26px 1fr 1fr 1fr 90px;
+    align-items:center; gap:6px; padding:5px 9px;
+    background:rgba(0,0,0,0.3); border:1px solid var(--border);
+    border-radius:3px; font-size:0.72rem; transition:all .3s;
+  }
+  .tlb-slot.occupied      { border-color:rgba(0,212,255,0.3); }
+  .tlb-slot.just-added    { border-color:var(--green);  background:rgba(0,255,136,0.08); animation:fl-g .6s ease; }
+  .tlb-slot.just-replaced { border-color:var(--yellow); background:rgba(255,204,0,0.08); animation:fl-y .6s ease; }
+  .tlb-slot.hit-slot      { border-color:var(--accent); background:rgba(0,212,255,0.10); animation:fl-b .6s ease; }
+  .tlb-slot.dirty-slot    { border-color:var(--red);    background:rgba(255,51,102,0.06); }
+  @keyframes fl-g { 0%{background:rgba(0,255,136,0.3)}   100%{background:rgba(0,255,136,0.08)} }
+  @keyframes fl-y { 0%{background:rgba(255,204,0,0.3)}   100%{background:rgba(255,204,0,0.08)} }
+  @keyframes fl-b { 0%{background:rgba(0,212,255,0.3)}   100%{background:rgba(0,212,255,0.10)} }
+  .slot-idx  { color:var(--dim); font-size:0.63rem; }
+  .slot-pg   { color:var(--accent); }
+  .slot-fr   { color:var(--green); }
+  .slot-meta { font-size:0.6rem; color:var(--dim); }
+  .slot-bits { font-size:0.6rem; color:var(--yellow); }
+  .slot-empty{ color:rgba(74,122,138,0.4); font-style:italic; grid-column:2/6; }
+
+  /* ── BITS ── */
+  .bit { display:inline-block; width:15px; text-align:center; font-weight:700; font-size:0.76rem; }
+  .bV1{color:var(--green)}  .bV0{color:var(--dim)}
+  .bD1{color:var(--red)}    .bD0{color:var(--dim)}
+  .bR1{color:var(--green)}  .bR0{color:var(--dim)}
+  .bA1{color:var(--accent)} .bA0{color:var(--dim)}
+  .bG1{color:var(--yellow)} .bG0{color:var(--dim)}
+
+  .prot-str { font-family:'Orbitron',monospace; font-size:0.63rem; letter-spacing:1px; }
+  .pR{color:var(--green)} .pW{color:var(--yellow)} .pX{color:var(--orange)} .pD{color:var(--dim)}
+
+  /* ── PT LEGEND ── */
+  .pt-legend { display:flex; gap:10px; flex-wrap:wrap; margin-top:7px; font-size:0.65rem; }
+  .legend-item { display:flex; align-items:center; gap:4px; color:var(--dim); }
+  .ldot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+
+  /* ── SUMMARY ── */
+  .summary-grid { display:grid; grid-template-columns:repeat(8,1fr); gap:7px; }
+  .stat-box { background:rgba(0,0,0,0.4); border:1px solid var(--border);
+              border-radius:3px; padding:9px 6px; text-align:center; }
+  .stat-val { font-family:'Orbitron',monospace; font-size:1.25rem; font-weight:700;
+              color:var(--accent); display:block; }
+  .stat-lbl { font-size:0.58rem; color:var(--dim); letter-spacing:1px; margin-top:3px; display:block; }
+
+  .eat-row { display:flex; gap:1.2rem; margin-top:0.8rem; }
+  .eat-box { flex:1; background:rgba(0,212,255,0.06); border:1px solid rgba(0,212,255,0.2);
+             border-radius:3px; padding:10px; text-align:center; }
+  .eat-val { font-family:'Orbitron',monospace; font-size:1.1rem; color:var(--green); display:block; }
+  .eat-lbl { font-size:0.6rem; color:var(--dim); letter-spacing:1px; }
+  .eat-formula { font-size:0.7rem; color:var(--accent); display:block; margin-top:4px; }
+
+  /* ── LOG ── */
+  #log { background:rgba(0,0,0,0.5); border:1px solid var(--border); border-radius:3px;
+         padding:9px; font-size:0.7rem; max-height:160px; overflow-y:auto; color:var(--dim); }
+  .log-hit      { color:var(--green); }
+  .log-miss     { color:var(--red); }
+  .log-replace  { color:var(--yellow); }
+  .log-fault    { color:var(--orange); }
+  .log-writeback{ color:var(--purple); }
+  .log-flush    { color:var(--accent); }
+  .log-thrash   { color:var(--red); font-weight:bold; }
+  .log-info     { color:var(--accent); }
+
+  /* ── MISC ── */
+  .placeholder { text-align:center; color:var(--dim); padding:1.8rem; font-size:0.73rem; letter-spacing:1px; }
+  @media(max-width:900px){
+    .grid-main{grid-template-columns:1fr} .state-grid{grid-template-columns:1fr}
+    .summary-grid{grid-template-columns:repeat(4,1fr)}
+  }
+  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TLB SIMULATOR</h1>
+  <div class="subtitle">TRANSLATION LOOKASIDE BUFFER · PAGE FAULTS · WRITE-BACK · THRASHING DETECTION · CONTEXT SWITCH</div>
+</header>
+
+<div class="container">
+<div class="grid-main">
+
+<!-- ═══════════════════════════ LEFT ═══════════════════════════ -->
+<div>
+
+  <!-- Configuration -->
+  <div class="panel">
+    <div class="panel-title">⬡ Configuration</div>
+
+    <label>Virtual Addresses (space / comma separated)</label>
+    <textarea id="inAddresses">0 512 1024 1536 2048 512 1024 3072 4096 512</textarea>
+
+    <label>Page Size (bytes)</label>
+    <input type="number" id="inPageSize" value="256" min="16">
+
+    <label>Number of Pages</label>
+    <input type="number" id="inNumPages" value="8" min="1">
+
+    <label>TLB Size (entries)</label>
+    <input type="number" id="inTLBSize" value="4" min="1">
+
+    <label>Replacement Policy</label>
+    <select id="inPolicy">
+      <option value="FIFO">FIFO — First In First Out</option>
+      <option value="LRU">LRU — Least Recently Used</option>
+    </select>
+
+    <label>TLB Hit Time (ns)</label>
+    <input type="number" id="inTLBTime" value="10" min="1">
+
+    <label>Memory Access Time (ns)</label>
+    <input type="number" id="inMemTime" value="100" min="1">
+
+    <div class="btn-row">
+      <button id="btnRun">▶ Run</button>
+      <button id="btnStep">⧖ Step</button>
+      <button id="btnReset">↺ Reset</button>
+    </div>
+    <div class="step-controls" id="stepControls">
+      <button id="btnPrev">◀ Prev</button>
+      <button id="btnNext">Next ▶</button>
+    </div>
+    <div id="stepInfo"></div>
+  </div>
+
+  <!-- Extended / Access Control -->
+  <div class="panel" style="margin-top:1rem">
+    <div class="panel-title">⬡ Access Control &amp; Page Bits</div>
+
+    <label>Access Type</label>
+    <select id="inAccessType">
+      <option value="read">Read</option>
+      <option value="write">Write (sets Dirty bit)</option>
+      <option value="execute">Execute</option>
+    </select>
+
+    <label>Page-Table Levels (k for EAT miss penalty)</label>
+    <input type="number" id="inPTLevels" value="2" min="1" max="4">
+
+    <label>Disk Access Time — page fault penalty (ns)</label>
+    <input type="number" id="inDiskTime" value="1000" min="1">
+
+    <label>ASID — Address Space ID</label>
+    <input type="number" id="inASID" value="1" min="0">
+
+    <label>Default Protection Bits</label>
+    <div class="check-row">
+      <label class="chk chk-r"><input type="checkbox" id="permR" checked> R</label>
+      <label class="chk chk-w"><input type="checkbox" id="permW" checked> W</label>
+      <label class="chk chk-x"><input type="checkbox" id="permX"> X</label>
+    </div>
+
+    <label style="margin-top:10px">Global Bit</label>
+    <div class="check-row">
+      <label class="chk chk-g"><input type="checkbox" id="globalBit"> G — never evict from TLB</label>
+    </div>
+  </div>
+
+  <!-- Context Switch -->
+  <div class="panel" style="margin-top:1rem">
+    <div class="panel-title">⬡ Context Switch / TLB Flush</div>
+    <label>Switch to New ASID</label>
+    <input type="number" id="inNewASID" value="2" min="0">
+    <button id="btnSwitch">⇄ Switch Process (Flush Non-Global TLB)</button>
+  </div>
+
+  <!-- Thrashing banner -->
+  <div id="thrashBanner" style="margin-top:1rem">
+    ⚠ TLB THRASHING DETECTED — miss rate &gt; 70%
+  </div>
+
+  <!-- Event Log -->
+  <div class="panel" style="margin-top:1rem">
+    <div class="panel-title">⬡ Event Log</div>
+    <div id="log"><span class="log-info">// Awaiting simulation...</span></div>
+  </div>
+
+</div><!-- /LEFT -->
+
+<!-- ═══════════════════════════ RIGHT ═══════════════════════════ -->
+<div class="right-col">
+
+  <!-- Address Translation Results -->
+  <div class="panel">
+    <div class="panel-title">⬡ Address Translation Results</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Virtual Addr</th><th>Page</th><th>Offset</th>
+          <th>TLB Result</th><th>Type</th><th>Frame</th><th>Physical Addr</th>
+          <th>Replaced</th><th>PF</th><th>WB</th><th>Thrash</th>
+        </tr></thead>
+        <tbody id="resultBody">
+          <tr><td colspan="12"><div class="placeholder">Run simulation to see results</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TLB State + Page Table -->
+  <div class="state-grid">
+
+    <!-- TLB STATE -->
+    <div class="panel">
+      <div class="panel-title">⬡ TLB State</div>
+      <div id="tlbState"><div class="placeholder">—</div></div>
+    </div>
+
+    <!-- PAGE TABLE -->
+    <div class="panel">
+      <div class="panel-title">⬡ Page Table</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Page</th><th>Frame</th>
+            <th>V</th><th>D</th><th>R</th><th>A</th>
+            <th>R/W/X</th><th>G</th><th>ASID</th>
+          </tr></thead>
+          <tbody id="ptBody">
+            <tr><td colspan="9"><div class="placeholder">—</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pt-legend">
+        <div class="legend-item"><span class="ldot" style="background:rgba(0,255,136,0.5)"></span>R=1 (referenced)</div>
+        <div class="legend-item"><span class="ldot" style="background:rgba(255,51,102,0.6)"></span>D=1 (dirty)</div>
+        <div class="legend-item"><span class="ldot" style="background:rgba(255,140,0,0.5)"></span>D=1 &amp; R=1</div>
+        <div class="legend-item"><span class="ldot" style="background:rgba(255,140,0,0.25)"></span>Page Fault</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Statistics -->
+  <div class="panel">
+    <div class="panel-title">⬡ Summary Statistics</div>
+    <div class="summary-grid">
+      <div class="stat-box"><span class="stat-val" id="sTotalAccess">—</span><span class="stat-lbl">Accesses</span></div>
+      <div class="stat-box"><span class="stat-val" id="sHits"    style="color:var(--green)">—</span><span class="stat-lbl">TLB Hits</span></div>
+      <div class="stat-box"><span class="stat-val" id="sMisses"  style="color:var(--red)">—</span><span class="stat-lbl">TLB Misses</span></div>
+      <div class="stat-box"><span class="stat-val" id="sPageFaults" style="color:var(--orange)">—</span><span class="stat-lbl">Page Faults</span></div>
+      <div class="stat-box"><span class="stat-val" id="sWriteBacks" style="color:var(--purple)">—</span><span class="stat-lbl">Write-Backs</span></div>
+      <div class="stat-box"><span class="stat-val" id="sHitRatio">—</span><span class="stat-lbl">Hit Ratio</span></div>
+      <div class="stat-box"><span class="stat-val" id="sMissRatio" style="color:var(--red)">—</span><span class="stat-lbl">Miss Ratio</span></div>
+      <div class="stat-box"><span class="stat-val" id="sPFRate" style="color:var(--orange)">—</span><span class="stat-lbl">PF Rate</span></div>
+    </div>
+    <div class="eat-row">
+      <div class="eat-box">
+        <span class="eat-val" id="sEAT">—</span>
+        <span class="eat-lbl">Effective Access Time (ns)</span>
+      </div>
+      <div class="eat-box">
+        <span class="eat-formula" id="sEATFormula">—</span>
+        <span class="eat-lbl">EAT = h×(T+M) + (1-h)×(T+kM+pf×DiskTime)</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /RIGHT -->
+</div><!-- /grid-main -->
+</div><!-- /container -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// SIMULATOR CORE
+// All original logic preserved; extended with page_fault, write_back,
+// thrashing, accessed bit (A), improved EAT, switch_process().
+// ══════════════════════════════════════════════════════════════════════════════
+
+const DISK_TIME        = 1000;
+const THRASH_WINDOW    = 10;
+const THRASH_THRESHOLD = 0.70;
+
+class TLBSimulator {
+  constructor(cfg) {
+    this.pageSize   = cfg.pageSize;
+    this.numPages   = cfg.numPages;
+    this.tlbSize    = cfg.tlbSize;
+    this.policy     = cfg.policy;
+    this.tlbHitTime = cfg.tlbHitTime;
+    this.memTime    = cfg.memTime;
+    this.ptLevels   = cfg.ptLevels   ?? 2;
+    this.diskTime   = cfg.diskTime   ?? DISK_TIME;
+    this.asid       = cfg.asid       ?? 1;
+    this.permRead   = cfg.permRead   ?? 1;
+    this.permWrite  = cfg.permWrite  ?? 1;
+    this.permExec   = cfg.permExec   ?? 0;
+    this.globalBit  = cfg.globalBit  ?? 0;
+
+    // page → {frame,valid,dirty,reference,accessed,read,write,execute,global,asid}
+    this.pageTable = {};
+    this.nextFrame = 0;
+    this.tlb       = [];          // [{page,frame}]
+    this.fifoQueue = [];
+    this.lruOrder  = [];
+    this.recentHits = [];         // sliding window for thrashing
+  }
+
+  _newEntry(frame) {
+    return {
+      frame, valid:0, dirty:0, reference:0, accessed:0,
+      read:this.permRead, write:this.permWrite, execute:this.permExec,
+      global:this.globalBit, asid:this.asid,
+    };
+  }
+
+  _tlbLookup(page) { return this.tlb.find(e => e.page === page) || null; }
+
+  _tlbInsert(page, frame) {
+    let replaced = null, writeBack = false;
+    if (this.tlb.length >= this.tlbSize) {
+      // evict oldest non-global
+      const candidates = this.policy === 'FIFO' ? [...this.fifoQueue] : [...this.lruOrder];
+      let evictPage = candidates.find(p => !this.pageTable[p]?.global);
+      if (evictPage === undefined) evictPage = candidates[0];
+      if (this.pageTable[evictPage]?.dirty) writeBack = true;
+      replaced = evictPage;
+      this.tlb       = this.tlb.filter(e => e.page !== evictPage);
+      this.fifoQueue = this.fifoQueue.filter(p => p !== evictPage);
+      this.lruOrder  = this.lruOrder.filter(p => p !== evictPage);
+    }
+    this.tlb.push({page, frame});
+    this.fifoQueue.push(page);
+    this.lruOrder.push(page);
+    return {replaced, writeBack};
+  }
+
+  _updateLRU(page) {
+    this.lruOrder = this.lruOrder.filter(p => p !== page);
+    this.lruOrder.push(page);
+  }
+
+  _allocFrame(page) {
+    if (this.pageTable[page] === undefined)
+      this.pageTable[page] = this._newEntry(this.nextFrame++);
+    return this.pageTable[page].frame;
+  }
+
+  _checkThrashing() {
+    if (this.recentHits.length < THRASH_WINDOW) return false;
+    const window = this.recentHits.slice(-THRASH_WINDOW);
+    return (window.filter(h => !h).length / THRASH_WINDOW) > THRASH_THRESHOLD;
+  }
+
+  access(virtualAddr, accessType = 'read') {
+    const page   = Math.floor(virtualAddr / this.pageSize);
+    const offset = virtualAddr % this.pageSize;
+
+    const tlbBefore = this.tlb.map(e => ({...e}));
+    const tlbEntry  = this._tlbLookup(page);
+    let hit = !!tlbEntry, frame, replaced = null, pageFault = false, writeBack = false;
+
+    if (hit) {
+      frame = tlbEntry.frame;
+      this._updateLRU(page);
+      this.pageTable[page].reference = 1;
+      this.pageTable[page].accessed  = 1;
+    } else {
+      frame = this._allocFrame(page);
+      const pe = this.pageTable[page];
+      if (!pe.valid) {
+        pageFault       = true;
+        pe.valid        = 1;
+        pe.reference    = 1;
+        pe.accessed     = 1;
+      } else {
+        pe.reference    = 1;
+        pe.accessed     = 1;
+      }
+      const ins = this._tlbInsert(page, frame);
+      replaced  = ins.replaced;
+      writeBack = ins.writeBack;
+    }
+
+    if (accessType === 'write') this.pageTable[page].dirty = 1;
+
+    this.recentHits.push(hit);
+    if (this.recentHits.length > THRASH_WINDOW * 2) this.recentHits.shift();
+    const thrashing  = this._checkThrashing();
+    const physAddr   = frame * this.pageSize + offset;
+    const tlbAfter   = this.tlb.map(e => ({...e}));
+
+    return {
+      virtualAddr, page, offset, hit, accessType, frame, physAddr,
+      replaced, pageFault, writeBack, thrashing,
+      tlbBefore, tlbAfter,
+      pageTable: JSON.parse(JSON.stringify(this.pageTable)),
+      lruOrder: [...this.lruOrder], fifoQueue: [...this.fifoQueue],
+    };
+  }
+
+  // Context switch: flush non-global TLB entries
+  switchProcess(newAsid) {
+    const flushed = [];
+    this.tlb = this.tlb.filter(e => {
+      const g = this.pageTable[e.page]?.global;
+      if (!g) { flushed.push(e.page); return false; }
+      return true;
+    });
+    this.fifoQueue = this.fifoQueue.filter(p => !flushed.includes(p));
+    this.lruOrder  = this.lruOrder.filter(p => !flushed.includes(p));
+    this.asid = newAsid;
+    return flushed;
+  }
+}
+
+// ── UI STATE ──────────────────────────────────────────────────────────────────
+
+let steps = [], stepIdx = 0, isStepMode = false, simRef = null;
+
+function parseAddresses(raw) {
+  return raw.trim().split(/[\s,\n]+/).map(s => parseInt(s)).filter(n => !isNaN(n));
+}
+
+function getCfg() {
+  return {
+    pageSize:   parseInt(document.getElementById('inPageSize').value),
+    numPages:   parseInt(document.getElementById('inNumPages').value),
+    tlbSize:    parseInt(document.getElementById('inTLBSize').value),
+    policy:     document.getElementById('inPolicy').value,
+    tlbHitTime: parseInt(document.getElementById('inTLBTime').value),
+    memTime:    parseInt(document.getElementById('inMemTime').value),
+    ptLevels:   parseInt(document.getElementById('inPTLevels').value) || 2,
+    diskTime:   parseInt(document.getElementById('inDiskTime').value) || 1000,
+    asid:       parseInt(document.getElementById('inASID').value) || 1,
+    permRead:   document.getElementById('permR').checked ? 1 : 0,
+    permWrite:  document.getElementById('permW').checked ? 1 : 0,
+    permExec:   document.getElementById('permX').checked ? 1 : 0,
+    globalBit:  document.getElementById('globalBit').checked ? 1 : 0,
+    accessType: document.getElementById('inAccessType').value,
+  };
+}
+
+// ── RUNNERS ───────────────────────────────────────────────────────────────────
+
+function runFull() {
+  const addresses = parseAddresses(document.getElementById('inAddresses').value);
+  if (!addresses.length) return;
+  const cfg = getCfg();
+  simRef = new TLBSimulator(cfg);
+  steps = addresses.map(a => simRef.access(a, cfg.accessType));
+  isStepMode = false;
+  document.getElementById('stepControls').classList.remove('active');
+  renderAll(steps, cfg);
+}
+
+function startStepMode() {
+  const addresses = parseAddresses(document.getElementById('inAddresses').value);
+  if (!addresses.length) return;
+  const cfg = getCfg();
+  simRef = new TLBSimulator(cfg);
+  steps = addresses.map(a => simRef.access(a, cfg.accessType));
+  isStepMode = true; stepIdx = 0;
+  document.getElementById('stepControls').classList.add('active');
+  clearOutputs();
+  renderStep(steps, cfg, stepIdx);
+}
+
+function clearOutputs() {
+  document.getElementById('resultBody').innerHTML =
+    '<tr><td colspan="12"><div class="placeholder">Stepping through...</div></td></tr>';
+  document.getElementById('tlbState').innerHTML = '<div class="placeholder">—</div>';
+  document.getElementById('ptBody').innerHTML =
+    '<tr><td colspan="9"><div class="placeholder">—</div></td></tr>';
+  document.getElementById('log').innerHTML = '<span class="log-info">// Step mode active</span>';
+  ['sTotalAccess','sHits','sMisses','sPageFaults','sWriteBacks',
+   'sHitRatio','sMissRatio','sPFRate','sEAT','sEATFormula'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+  document.getElementById('thrashBanner').style.display = 'none';
+}
+
+function doReset() {
+  steps = []; stepIdx = 0; isStepMode = false; simRef = null;
+  document.getElementById('stepControls').classList.remove('active');
+  document.getElementById('stepInfo').textContent = '';
+  document.getElementById('resultBody').innerHTML =
+    '<tr><td colspan="12"><div class="placeholder">Run simulation to see results</div></td></tr>';
+  document.getElementById('tlbState').innerHTML = '<div class="placeholder">—</div>';
+  document.getElementById('ptBody').innerHTML =
+    '<tr><td colspan="9"><div class="placeholder">—</div></td></tr>';
+  document.getElementById('log').innerHTML = '<span class="log-info">// Awaiting simulation...</span>';
+  ['sTotalAccess','sHits','sMisses','sPageFaults','sWriteBacks',
+   'sHitRatio','sMissRatio','sPFRate','sEAT','sEATFormula'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+  document.getElementById('thrashBanner').style.display = 'none';
+}
+
+// ── RENDER ALL / STEP ─────────────────────────────────────────────────────────
+
+function renderAll(stps, cfg) {
+  const tbody = document.getElementById('resultBody');
+  tbody.innerHTML = '';
+  stps.forEach((s, i) => tbody.appendChild(makeResultRow(s, i, false)));
+  const last = stps[stps.length - 1];
+  renderTLBState(last.tlbAfter, cfg.tlbSize, last, 'after');
+  renderPageTable(last.pageTable, cfg.numPages);
+  renderLog(stps);
+  renderSummary(stps, cfg);
+}
+
+function renderStep(stps, cfg, idx) {
+  const subset = stps.slice(0, idx + 1);
+  document.getElementById('stepInfo').textContent = `Step ${idx+1} / ${stps.length}`;
+  const tbody = document.getElementById('resultBody');
+  tbody.innerHTML = '';
+  subset.forEach((s, i) => {
+    const row = tbody.appendChild(makeResultRow(s, i, i === idx));
+    if (i === idx) row.scrollIntoView({behavior:'smooth', block:'nearest'});
+  });
+  const cur = stps[idx];
+  renderTLBState(cur.tlbAfter, cfg.tlbSize, cur, 'after');
+  renderPageTable(cur.pageTable, cfg.numPages);
+  addLog(cur, idx);
+  renderSummary(subset, cfg);
+}
+
+// ── RESULT ROW ────────────────────────────────────────────────────────────────
+
+function typeBadge(at) {
+  if (at==='write')   return `<span class="badge badge-wr">WR</span>`;
+  if (at==='execute') return `<span class="badge badge-ex">EX</span>`;
+  return `<span class="badge badge-rd">RD</span>`;
+}
+
+function makeResultRow(s, i, isActive) {
+  const tr = document.createElement('tr');
+  tr.className = isActive ? 'active-row'
+    : (s.pageFault ? 'fault' : (s.hit ? 'hit' : 'miss'));
+
+  const replacedCell = s.replaced !== null
+    ? `<span class="badge badge-replace">PG ${s.replaced}</span>`
+    : `<span style="color:var(--dim)">—</span>`;
+
+  const pfCell = s.pageFault
+    ? `<span class="badge badge-fault">PF</span>` : `<span style="color:var(--dim)">·</span>`;
+  const wbCell = s.writeBack
+    ? `<span class="badge badge-wb">WB</span>` : `<span style="color:var(--dim)">·</span>`;
+  const thrCell = s.thrashing
+    ? `<span style="color:var(--red);font-weight:bold">⚠</span>` : `<span style="color:var(--dim)">·</span>`;
+
+  tr.innerHTML = `
+    <td>${i+1}</td>
+    <td>${s.virtualAddr}</td>
+    <td>${s.page}</td>
+    <td>${s.offset}</td>
+    <td><span class="badge ${s.hit?'badge-hit':'badge-miss'}">${s.hit?'HIT':'MISS'}</span></td>
+    <td>${typeBadge(s.accessType)}</td>
+    <td>${s.frame}</td>
+    <td>${s.physAddr}</td>
+    <td>${replacedCell}</td>
+    <td>${pfCell}</td>
+    <td>${wbCell}</td>
+    <td>${thrCell}</td>
+  `;
+  return tr;
+}
+
+// ── TLB STATE ─────────────────────────────────────────────────────────────────
+
+function renderTLBState(tlb, tlbSize, curStep, phase) {
+  const container = document.getElementById('tlbState');
+  const slots = document.createElement('div');
+  slots.className = 'tlb-slots';
+
+  for (let i = 0; i < tlbSize; i++) {
+    const entry = tlb[i];
+    const div   = document.createElement('div');
+    let cls = '';
+    if (entry) {
+      cls = 'occupied';
+      if (curStep) {
+        if (!curStep.hit && entry.page === curStep.page && phase === 'after')
+          cls = curStep.replaced !== null ? 'just-replaced' : 'just-added';
+        else if (curStep.hit && entry.page === curStep.page)
+          cls = 'hit-slot';
+        else if (curStep.pageTable?.[entry.page]?.dirty)
+          cls = 'dirty-slot';
+      }
+    }
+    div.className = `tlb-slot ${cls}`;
+    if (entry) {
+      const pe = curStep?.pageTable?.[entry.page] || {};
+      div.innerHTML = `
+        <span class="slot-idx">[${i}]</span>
+        <span class="slot-pg">PG ${entry.page}</span>
+        <span class="slot-fr">→ FR ${entry.frame}</span>
+        <span class="slot-bits">ASID:${pe.asid??'—'} R:${pe.reference??0} A:${pe.accessed??0} D:${pe.dirty??0} G:${pe.global??0}</span>
+        <span class="slot-meta">0x${entry.page.toString(16).toUpperCase()}</span>
+      `;
+    } else {
+      div.innerHTML = `<span class="slot-idx">[${i}]</span><span class="slot-empty">— empty —</span>`;
+    }
+    slots.appendChild(div);
+  }
+  container.innerHTML = '';
+  container.appendChild(slots);
+}
+
+// ── PAGE TABLE ────────────────────────────────────────────────────────────────
+
+function b(val, on, off) {
+  return `<span class="bit ${val ? on : off}">${val}</span>`;
+}
+function protStr(pe) {
+  if (!pe) return '<span class="prot-str"><span class="pD">-</span><span class="pD">-</span><span class="pD">-</span></span>';
+  return `<span class="prot-str">`
+    + `<span class="${pe.read?'pR':'pD'}">${pe.read?'R':'-'}</span>`
+    + `<span class="${pe.write?'pW':'pD'}">${pe.write?'W':'-'}</span>`
+    + `<span class="${pe.execute?'pX':'pD'}">${pe.execute?'X':'-'}</span>`
+    + `</span>`;
+}
+
+function renderPageTable(pt, numPages) {
+  const tbody = document.getElementById('ptBody');
+  tbody.innerHTML = '';
+  for (let p = 0; p < numPages; p++) {
+    const tr = document.createElement('tr');
+    const pe = pt[p];
+    if (pe !== undefined) {
+      if (!pe.valid)              tr.className = 'pt-fault';
+      else if (pe.dirty && pe.reference) tr.className = 'pt-dref';
+      else if (pe.dirty)         tr.className = 'pt-dirty';
+      else if (pe.reference)     tr.className = 'pt-ref';
+
+      tr.innerHTML = `
+        <td>${p}</td>
+        <td>${pe.frame}</td>
+        <td>${b(pe.valid,    'bV1','bV0')}</td>
+        <td>${b(pe.dirty,    'bD1','bD0')}</td>
+        <td>${b(pe.reference,'bR1','bR0')}</td>
+        <td>${b(pe.accessed, 'bA1','bA0')}</td>
+        <td>${protStr(pe)}</td>
+        <td>${b(pe.global,   'bG1','bG0')}</td>
+        <td style="color:var(--yellow)">${pe.asid}</td>
+      `;
+    } else {
+      tr.innerHTML = `
+        <td>${p}</td><td><span style="color:var(--dim)">—</span></td>
+        <td>${b(0,'bV1','bV0')}</td><td>${b(0,'bD1','bD0')}</td>
+        <td>${b(0,'bR1','bR0')}</td><td>${b(0,'bA1','bA0')}</td>
+        <td>${protStr(null)}</td><td>${b(0,'bG1','bG0')}</td>
+        <td><span style="color:var(--dim)">—</span></td>
+      `;
+    }
+    tbody.appendChild(tr);
+  }
+}
+
+// ── SUMMARY ───────────────────────────────────────────────────────────────────
+
+function renderSummary(stps, cfg) {
+  const n          = stps.length;
+  const hits       = stps.filter(s => s.hit).length;
+  const misses     = n - hits;
+  const pageFaults = stps.filter(s => s.pageFault).length;
+  const writeBacks = stps.filter(s => s.writeBack).length;
+  const hr  = n ? hits / n   : 0;
+  const mr  = 1 - hr;
+  const pfr = n ? pageFaults / n : 0;
+  const k   = cfg.ptLevels, dt = cfg.diskTime, T = cfg.tlbHitTime, M = cfg.memTime;
+  const eat = hr * (T + M) + mr * (T + k * M + pfr * dt);
+  const thrashing = stps.some(s => s.thrashing);
+
+  document.getElementById('sTotalAccess').textContent = n;
+  document.getElementById('sHits').textContent        = hits;
+  document.getElementById('sMisses').textContent      = misses;
+  document.getElementById('sPageFaults').textContent  = pageFaults;
+  document.getElementById('sWriteBacks').textContent  = writeBacks;
+  document.getElementById('sHitRatio').textContent    = (hr*100).toFixed(1)+'%';
+  document.getElementById('sMissRatio').textContent   = (mr*100).toFixed(1)+'%';
+  document.getElementById('sPFRate').textContent      = (pfr*100).toFixed(1)+'%';
+  document.getElementById('sEAT').textContent         = eat.toFixed(2);
+  document.getElementById('sEATFormula').textContent  =
+    `h×(T+M)+(1-h)×(T+${k}M+pf×D) = ${hr.toFixed(2)}×(${T}+${M})+${mr.toFixed(2)}×(${T}+${k}×${M}+${pfr.toFixed(3)}×${dt}) = ${eat.toFixed(2)} ns`;
+
+  document.getElementById('thrashBanner').style.display = thrashing ? 'block' : 'none';
+}
+
+// ── LOG ───────────────────────────────────────────────────────────────────────
+
+function logLine(s, i) {
+  const pe  = s.pageTable[s.page] || {};
+  const rw  = (pe.read?'R':'-') + (pe.write?'W':'-') + (pe.execute?'X':'-');
+  let lines = [];
+  lines.push({
+    cls: s.hit ? 'log-hit' : 'log-miss',
+    txt: `[${i+1}] VA:${s.virtualAddr} PG:${s.page} OFF:${s.offset} [${s.accessType.toUpperCase()}] → `
+       + `${s.hit?'✓ HIT':'✗ MISS'}  FR:${s.frame} PA:${s.physAddr}`
+       + (s.replaced !== null ? `  [EVICTED PG:${s.replaced}]` : '')
+       + `  V:${pe.valid??0} D:${pe.dirty??0} R:${pe.reference??0} A:${pe.accessed??0} [${rw}] G:${pe.global??0} ASID:${pe.asid??'—'}`,
+  });
+  if (s.pageFault)
+    lines.push({cls:'log-fault', txt:`    ⚡ PAGE FAULT → Loading PG:${s.page} from disk (+${document.getElementById('inDiskTime').value}ns)`});
+  if (s.writeBack)
+    lines.push({cls:'log-writeback', txt:`    💾 DIRTY WRITE-BACK → Flushing dirty page to disk`});
+  if (s.thrashing)
+    lines.push({cls:'log-thrash', txt:`    ⚠ TLB THRASHING — miss rate > ${Math.round(THRASH_THRESHOLD*100)}% over last ${THRASH_WINDOW} accesses`});
+  return lines;
+}
+
+function renderLog(stps) {
+  const log = document.getElementById('log');
+  log.innerHTML = '';
+  stps.forEach((s, i) => logLine(s,i).forEach(({cls,txt}) => {
+    const d = document.createElement('div');
+    d.className = cls; d.textContent = txt;
+    log.appendChild(d);
+  }));
+  log.scrollTop = log.scrollHeight;
+}
+
+function addLog(s, i) {
+  const log = document.getElementById('log');
+  logLine(s, i).forEach(({cls, txt}) => {
+    const d = document.createElement('div');
+    d.className = cls; d.textContent = txt;
+    log.appendChild(d);
+  });
+  log.scrollTop = log.scrollHeight;
+}
+
+// ── CONTEXT SWITCH ────────────────────────────────────────────────────────────
+
+document.getElementById('btnSwitch').addEventListener('click', () => {
+  if (!simRef) { alert('Run a simulation first.'); return; }
+  const newAsid = parseInt(document.getElementById('inNewASID').value);
+  if (isNaN(newAsid)) { alert('Enter a valid ASID.'); return; }
+
+  const flushed = simRef.switchProcess(newAsid);
+  const kept    = simRef.tlb.length;
+
+  const log = document.getElementById('log');
+  [{cls:'log-flush', txt:`⇄ CONTEXT SWITCH → ASID: ${simRef.asid}`},
+   {cls:'log-flush', txt:`  TLB FLUSH: ${flushed.length} non-global entries removed. Pages: [${flushed.join(', ')}]`},
+   {cls:'log-flush', txt:`  ${kept} global entry/entries retained.`},
+  ].forEach(({cls, txt}) => {
+    const d = document.createElement('div'); d.className = cls; d.textContent = txt;
+    log.appendChild(d);
+  });
+  log.scrollTop = log.scrollHeight;
+
+  // Re-render TLB with flushed state
+  if (steps.length) {
+    const last = steps[steps.length - 1];
+    const cfg  = getCfg();
+    // Build updated TLB array from simRef
+    const updatedTlb = simRef.tlb.map(e => ({...e}));
+    renderTLBState(updatedTlb, cfg.tlbSize, last, 'after');
+  }
+});
+
+// ── EVENTS ────────────────────────────────────────────────────────────────────
+
+document.getElementById('btnRun').addEventListener('click', runFull);
+document.getElementById('btnStep').addEventListener('click', startStepMode);
+document.getElementById('btnReset').addEventListener('click', doReset);
+
+document.getElementById('btnNext').addEventListener('click', () => {
+  if (!isStepMode || !steps.length) return;
+  if (stepIdx < steps.length - 1) stepIdx++;
+  renderStep(steps, getCfg(), stepIdx);
+});
+document.getElementById('btnPrev').addEventListener('click', () => {
+  if (!isStepMode || !steps.length) return;
+  if (stepIdx > 0) stepIdx--;
+  renderStep(steps, getCfg(), stepIdx);
+});
+</script>
+</body>
+</html>
